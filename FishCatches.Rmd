@@ -97,7 +97,7 @@ dfcountry$Change <- dfcountry$Total2014 - dfcountry$Total2006
 
 dfcountry <- dfcountry[dfcountry$Change > 2000 | dfcountry$Change < -2000,]
 
-ss <- ggplot(data = dfcountry, aes(x = reorder(Country,-Change), y = Change, fill = Species)) + geom_bar(stat = "identity", alpha = .92, colour = "#535353") + mytheme + themeline + scale_fill_manual(values = palette[2:3]) + theme(legend.position = c(.85,.96), legend.background = element_rect("#F0F0F0"), legend.direction="horizontal") + labs(x = "Country", y = "Change in Fish Caught\n", title = "Norway and Russia saw the biggest change in consumption\n") + guides(alpha = FALSE) + scale_y_continuous(breaks = seq(0,2000000,250000))
+ss <- ggplot(data = dfcountry, aes(x = reorder(Country,-Change), y = Change, fill = Species)) + geom_bar(stat = "identity", alpha = .92, colour = "#535353") + mytheme + themeline + scale_fill_manual(values = palette[2:3]) + theme(legend.position = c(.85,.96), legend.background = element_rect("#F0F0F0"), legend.direction="horizontal") + labs(x = "Country", y = "Change in Fish Caught\n", title = "Norway and Russia saw the biggest change in consumption\n") + guides(alpha = FALSE) + scale_y_continuous(breaks = seq(0,2000000,250000), labels = comma)
 
 png(filename="countries.png", width = 2300, height = 1500, res = 200)
 ss
