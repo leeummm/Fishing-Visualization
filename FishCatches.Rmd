@@ -1,0 +1,136 @@
+---
+title: "FishCatches"
+author: "Liam Schilling"
+date: "6/16/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Loading Data and Packages
+```{r}
+library(tidyverse)
+library(RColorBrewer)
+library(ggalt)
+library(scales)
+library(reshape2)
+library(ggthemes)
+df <- read.csv("fish_catches.csv")
+
+# Loading personal ggplot theme
+
+mytheme <- theme(panel.background = element_rect(fill = "#F0F0F0"),
+                 plot.background = element_rect(fill = "#F0F0F0"),
+                 panel.border = element_rect(colour="#f0f0f0", fill = NA),
+                 panel.grid.major = element_line(colour="#d0d0d0",size=.75),
+                 axis.text.y=element_text(size = 11,colour="#535353",face="bold"),
+                 plot.title=element_text(face="bold", hjust=0,vjust=2,size = 20,colour="#3c3c3c"),
+                 plot.caption = element_text(size=6),
+                 axis.text.x = element_text(size = 11,colour="#535353",face="bold"),
+                 plot.subtitle = element_text(size = 11, colour="#535353",face="bold", hjust=0,vjust=2),
+                 legend.position = "none",
+                 axis.title.y = element_text(size=11,colour="#535353",face="bold",lineheight = 1, vjust=-2),
+                 axis.title.x = element_text(size=11,colour="#535353",face="bold",lineheight=1,vjust=0),
+                 plot.margin = unit(c(1,1,.5,.7),"cm")
+                 )
+themeline <- geom_hline(yintercept=0,size=1.2,colour="#535353")
+```
+
+# Question 1: Which species are being fished more relative to history?
+
+```{r}
+dfh <- df %>% group_by(Species) %>% summarise("x14" = sum(X2014), "x06" = sum(X2006))
+
+dfh <- dfh[order(-dfh$x06),]
+x06top25 <- head(dfh, 25)
+
+x06top25 <- melt(x06top25, id="Species")
+dfh <- dfh[order(-dfh$x14),]
+x14top24 <- head(dfh, 25)
+
+ggplot(data = x06top25) + geom_dumbbell(aes(x = x06, xend = x14, y = Species),dot_guide = FALSE, size = 2, colour = "#bababa", colour_x = "#ffeb5b", colour_xend = "#cc0c02") + mytheme + labs(title = "Fish Catches (2006 vs. 2014)", y = "", x = "Amount Caught") + scale_x_continuous(limits = c(140000,8000000), breaks = seq(140000,8000000,750000), labels = comma)
+
+ggplot(data = x06top25) + geom_bar(colour = "#535353", aes(x = reorder(Species,-value), y = value, fill = variable, alpha = .85), stat = "identity", position = "dodge") + mytheme + scale_fill_economist() + scale_y_continuous(limits = c(140000,8000000), breaks = seq(140000,8000000,750000), labels = comma, oob=rescale_none) + themeline
+```
+
+# Ideas
+
+  + Create new data that shows change between each year 2014 - 2006, then make that graph
+  
+  
+  + Create graph like the one above but insert the "average" species with the average change   they saw
+```{r}
+df$change <- df$X2014 - df$X2006
+df2 <- df %>% group_by(Species) %>% summarise("Change" = sum(change))
+
+df2 <- df2[-1,]
+df2 <- df2[order(-df2$Change),]
+df2$Species <- as.character(df2$Species)
+avg <- mean(df2$Change)
+df2 <- rbind(df2,"AVG" = c("AVG",avg))
+
+df2$select <- 0
+df2$select[df2$Species == "AVG"] <- 1
+
+dffinal <- head(df2, 10)
+dffinal <- rbind(dffinal, tail(df2, 11))
+
+dffinal$Change <- as.integer(dffinal$Change)
+dffinal$select <- as.factor(dffinal$select)
+
+palette <- brewer.pal("YlGn", n = 3)
+w <- ggplot(data = dffinal, aes(x = reorder(Species, -Change), y = Change, fill = select)) + geom_bar(stat = "identity", colour = "#535353", alpha = .95) + mytheme + themeline + labs(x = "Species", y = "Change (Difference between 2014 and 2006)\n", title = "Change In Fish Species Caught (2014 - 2006)", subtitle = "1.5 million less fish were caught in 2014 vs. 2016; however, not all species have experienced a decrease in fishing rates", caption = "Source: Kaggle.com") + scale_fill_manual(values = palette[2:3]) + scale_y_continuous(labels = comma, breaks = seq(-4000000,4000000,500000))
+
+png(filename="FishChange.png", width = 2300, height = 1500, res = 200)
+w
+dev.off()
+```
+
+# it's clear that cod and mackeral got a pickup in fishing rates, what countries are the offenders?
+
+```{r}
+dfcountry <- df %>% group_by(Species, Country) %>% summarise(Total2014 = sum(X2014), Total2006 = sum(X2006)) %>% filter(Species == "COD" | Species == "MAC")
+
+dfcountry$Change <- dfcountry$Total2014 - dfcountry$Total2006
+
+dfcountry <- dfcountry[dfcountry$Change > 2000 | dfcountry$Change < -2000,]
+
+ss <- ggplot(data = dfcountry, aes(x = reorder(Country,-Change), y = Change, fill = Species)) + geom_bar(stat = "identity", alpha = .92, colour = "#535353") + mytheme + themeline + scale_fill_manual(values = palette[2:3]) + theme(legend.position = c(.85,.96), legend.background = element_rect("#F0F0F0"), legend.direction="horizontal") + labs(x = "Country", y = "Change in Fish Caught\n", title = "Norway and Russia saw the biggest change in consumption\n") + guides(alpha = FALSE) + scale_y_continuous(breaks = seq(0,2000000,250000))
+
+png(filename="countries.png", width = 2300, height = 1500, res = 200)
+ss
+dev.off()
+```
+
+
+# Make dumbell graph with change in species from 2006 to 2014, and include a species called "total"
+
+```{r}
+x06total <- as.integer(sum(df$X2006, na.rm=TRUE))
+x14total <- as.integer(sum(df$X2014, na.rm=TRUE))
+dfdumb <- df[,c(1,5,13)] %>% group_by(Species) %>% summarise(Total2014 = sum(X2014), Total2006 = sum(X2006))
+
+dfdumb$Species <- as.character(dfdumb$Species)
+dfdumb <- na.omit(dfdumb)
+dfdumb <- rbind(dfdumb, "new" = c("Total",x14total,x06total))
+dfdumb$Total2014 <- as.integer(dfdumb$Total2014)
+dfdumb$Total2006 <- as.integer(dfdumb$Total2006)
+
+
+
+dfdumb$change <- dfdumb$Total2014 - dfdumb$Total2006
+
+dfdumb <- dfdumb[order(-dfdumb$change),]
+
+dffinal <- head(dfdumb,10)
+dffinal <- rbind(dffinal, tail(dfdumb,10))
+
+a <- ggplot(data = dffinal) + geom_dumbbell(aes(y = reorder(Species,Total2006), x = Total2006, xend=Total2014), size = 1.5, colour = "#535353", colour_x = palette[2], colour_xend = palette[3], size_x = 3, size_xend = 3) + theme(legend.position = "top") + labs(title = "Fish Species With Greatest Change In Fishing Rates", subtitle = "While most species have seen a decrease in fishing rates, some species such as Cod and Mackeral\nhave seen increases over the past few years", caption = "Source: Kaggle.com",y = "Species", x = "Total Caught") + scale_x_continuous(labels = comma, breaks = seq(0, 30000000,5000000)) + mytheme + geom_text(data=data.frame(), aes(x=33000000,y = "Total",label = "2006"), hjust=0, size = 3.5, fontface="bold", colour = "#ADDD8E", nudge_y = .3) + geom_text(data=data.frame(), aes(x=31000000,y = "Total",label = "2014"), hjust=1.4, size = 3.5, fontface="bold", colour = "#31A354", nudge_y = .3)
+
+png(filename="FishDumbbell.png", width = 2300, height = 1500, res = 200)
+a
+dev.off()
+```
+
